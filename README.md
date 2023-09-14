@@ -1,8 +1,8 @@
-# (TODO: your game's title)
+# Neon Chase
 
-Author: (TODO: your name)
+Author: Jacky Sun
 
-Design: (TODO: In two sentences or fewer, describe what is new and interesting about your game.)
+Design: For simple collisions I designed around spheres and boxes. Bouncing balls just seems fun and straightforward to implement.
 
 Screen Shot:
 
@@ -10,6 +10,6 @@ Screen Shot:
 
 How To Play:
 
-(TODO: describe the controls and (if needed) goals/strategy.)
+Navigate in the scene to catch your target!
 
 This game was built with [NEST](NEST.md).

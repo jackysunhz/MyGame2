@@ -12,23 +12,46 @@
 
 #include <random>
 
-GLuint hexapod_meshes_for_lit_color_texture_program = 0;
-Load< MeshBuffer > hexapod_meshes(LoadTagDefault, []() -> MeshBuffer const * {
-	MeshBuffer const *ret = new MeshBuffer(data_path("hexapod.pnct"));
-	hexapod_meshes_for_lit_color_texture_program = ret->make_vao_for_program(lit_color_texture_program->program);
+GLuint boxsphere_meshes_for_lit_color_texture_program = 0;
+// Load< MeshBuffer > boxsphere_meshes(LoadTagDefault, []() -> MeshBuffer const * {
+// 	MeshBuffer const *ret = new MeshBuffer(data_path("brunch.pnct"));
+// 	boxsphere_meshes_for_lit_color_texture_program = ret->make_vao_for_program(lit_color_texture_program->program);
+// 	return ret;
+// });
+
+// Load< Scene > boxsphere_scene(LoadTagDefault, []() -> Scene const * {
+// 	return new Scene(data_path("brunch.scene"), [&](Scene &scene, Scene::Transform *transform, std::string const &mesh_name){
+// 		Mesh const &mesh = boxsphere_meshes->lookup(mesh_name);
+
+// 		scene.drawables.emplace_back(transform);
+// 		Scene::Drawable &drawable = scene.drawables.back();
+
+// 		drawable.pipeline = lit_color_texture_program_pipeline;
+
+// 		drawable.pipeline.vao = boxsphere_meshes_for_lit_color_texture_program;
+// 		drawable.pipeline.type = mesh.type;
+// 		drawable.pipeline.start = mesh.start;
+// 		drawable.pipeline.count = mesh.count;
+
+// 	});
+// });
+
+Load< MeshBuffer > boxsphere_meshes(LoadTagDefault, []() -> MeshBuffer const * {
+	MeshBuffer const *ret = new MeshBuffer(data_path("boxsphere.pnct"));
+	boxsphere_meshes_for_lit_color_texture_program = ret->make_vao_for_program(lit_color_texture_program->program);
 	return ret;
 });
 
-Load< Scene > hexapod_scene(LoadTagDefault, []() -> Scene const * {
-	return new Scene(data_path("hexapod.scene"), [&](Scene &scene, Scene::Transform *transform, std::string const &mesh_name){
-		Mesh const &mesh = hexapod_meshes->lookup(mesh_name);
+Load< Scene > boxsphere_scene(LoadTagDefault, []() -> Scene const * {
+	return new Scene(data_path("boxsphere.scene"), [&](Scene &scene, Scene::Transform *transform, std::string const &mesh_name){
+		Mesh const &mesh = boxsphere_meshes->lookup(mesh_name);
 
 		scene.drawables.emplace_back(transform);
 		Scene::Drawable &drawable = scene.drawables.back();
 
 		drawable.pipeline = lit_color_texture_program_pipeline;
 
-		drawable.pipeline.vao = hexapod_meshes_for_lit_color_texture_program;
+		drawable.pipeline.vao = boxsphere_meshes_for_lit_color_texture_program;
 		drawable.pipeline.type = mesh.type;
 		drawable.pipeline.start = mesh.start;
 		drawable.pipeline.count = mesh.count;
@@ -36,20 +59,37 @@ Load< Scene > hexapod_scene(LoadTagDefault, []() -> Scene const * {
 	});
 });
 
-PlayMode::PlayMode() : scene(*hexapod_scene) {
-	//get pointers to leg for convenience:
-	for (auto &transform : scene.transforms) {
-		if (transform.name == "Hip.FL") hip = &transform;
-		else if (transform.name == "UpperLeg.FL") upper_leg = &transform;
-		else if (transform.name == "LowerLeg.FL") lower_leg = &transform;
-	}
-	if (hip == nullptr) throw std::runtime_error("Hip not found.");
-	if (upper_leg == nullptr) throw std::runtime_error("Upper leg not found.");
-	if (lower_leg == nullptr) throw std::runtime_error("Lower leg not found.");
+PlayMode::PlayMode() : scene(*boxsphere_scene) {
+	// //get pointers to leg for convenience:
+	// for (auto &transform : scene.transforms) {
+	// 	if (transform.name == "Hip.FL") hip = &transform;
+	// 	else if (transform.name == "UpperLeg.FL") upper_leg = &transform;
+	// 	else if (transform.name == "LowerLeg.FL") lower_leg = &transform;
+	// }
+	// if (hip == nullptr) throw std::runtime_error("Hip not found.");
+	// if (upper_leg == nullptr) throw std::runtime_error("Upper leg not found.");
+	// if (lower_leg == nullptr) throw std::runtime_error("Lower leg not found.");
 
-	hip_base_rotation = hip->rotation;
-	upper_leg_base_rotation = upper_leg->rotation;
-	lower_leg_base_rotation = lower_leg->rotation;
+	// hip_base_rotation = hip->rotation;
+	// upper_leg_base_rotation = upper_leg->rotation;
+	// lower_leg_base_rotation = lower_leg->rotation;
+
+	for (auto &transform : scene.transforms) {
+		if (transform.name == "Sphere") sphere = &transform;
+		else if(transform.name == "Sphere1") sphere1 = &transform;
+		else if (transform.name == "Target") target = &transform;
+		else if (transform.name == "LeftAnkle") leftAnkle = &transform;
+		else if (transform.name == "RightAnkle") rightAnkle = &transform;
+	}
+	if (target == nullptr) throw std::runtime_error("Target not found.");
+	if (leftAnkle == nullptr) throw std::runtime_error("LeftAnkle not found.");
+	if (rightAnkle == nullptr) throw std::runtime_error("RightAnkle not found.");
+	if (sphere == nullptr) throw std::runtime_error("Sphere not found.");
+
+	leftAnkle_base_rotation = leftAnkle->rotation;
+	rightAnkle_base_rotation = rightAnkle->rotation;
+
+	std::cout<< "sphere position: " << sphere->position.x << ", " << sphere->position.y << ", " << sphere->position.z << std::endl;
 
 	//get pointer to camera for convenience:
 	if (scene.cameras.size() != 1) throw std::runtime_error("Expecting scene to have exactly one camera, but it has " + std::to_string(scene.cameras.size()));
@@ -120,29 +160,120 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 }
 
 void PlayMode::update(float elapsed) {
+	if(lose || win){
+		return;
+	}
 
 	//slowly rotates through [0,1):
-	wobble += elapsed / 10.0f;
+	wobble += elapsed * 2;
 	wobble -= std::floor(wobble);
 
-	hip->rotation = hip_base_rotation * glm::angleAxis(
-		glm::radians(5.0f * std::sin(wobble * 2.0f * float(M_PI))),
-		glm::vec3(0.0f, 1.0f, 0.0f)
+	// hip->rotation = hip_base_rotation * glm::angleAxis(
+	// 	glm::radians(5.0f * std::sin(wobble * 2.0f * float(M_PI))),
+	// 	glm::vec3(0.0f, 1.0f, 0.0f)
+	// );
+	// upper_leg->rotation = upper_leg_base_rotation * glm::angleAxis(
+	// 	glm::radians(7.0f * std::sin(wobble * 2.0f * 2.0f * float(M_PI))),
+	// 	glm::vec3(0.0f, 0.0f, 1.0f)
+	// );
+	// lower_leg->rotation = lower_leg_base_rotation * glm::angleAxis(
+	// 	glm::radians(10.0f * std::sin(wobble * 3.0f * 2.0f * float(M_PI))),
+	// 	glm::vec3(0.0f, 0.0f, 1.0f)
+	// );
+	leftAnkle->rotation = leftAnkle_base_rotation * glm::angleAxis(
+		glm::radians(30.0f * std::sin(wobble * 2.0f * float(M_PI))),
+		glm::vec3(1.0f, 0.0f, 0.0f)
 	);
-	upper_leg->rotation = upper_leg_base_rotation * glm::angleAxis(
-		glm::radians(7.0f * std::sin(wobble * 2.0f * 2.0f * float(M_PI))),
-		glm::vec3(0.0f, 0.0f, 1.0f)
+	rightAnkle->rotation = rightAnkle_base_rotation * glm::angleAxis(
+		glm::radians(-30.0f * std::sin(wobble * 2.0f * float(M_PI))),
+		glm::vec3(1.0f, 0.0f, 0.0f)
 	);
-	lower_leg->rotation = lower_leg_base_rotation * glm::angleAxis(
-		glm::radians(10.0f * std::sin(wobble * 3.0f * 2.0f * float(M_PI))),
-		glm::vec3(0.0f, 0.0f, 1.0f)
-	);
+
+	
+	sphere_speed.z -= 9.8f * elapsed;
+	sphere->position += sphere_speed * elapsed;
+	if (sphere->position.z < 1.0f) {//hit ground
+		sphere->position.z = 2.f - sphere->position.z;
+		sphere_speed.z *= -1.0f;
+	}
+	if (sphere->position.z > 19.f) {//hit ceiling
+		sphere->position.z = 38.f - sphere->position.z;
+		sphere_speed.z *= -1.0f;
+	}
+	if (sphere->position.x < -9.f) {//hit left wall
+		sphere->position.x = -18.f - sphere->position.x;
+		sphere_speed.x *= -1.0f;
+	}
+	if (sphere->position.x > 9.f) {//hit right wall
+		sphere->position.x = 18.f - sphere->position.x;
+		sphere_speed.x *= -1.0f;
+	}
+	if (sphere->position.y < -9.f) {//hit back wall
+		sphere->position.y = -18.f - sphere->position.y;
+		sphere_speed.y *= -1.0f;
+	}
+	if (sphere->position.y > 9.f) {//hit front wall
+		sphere->position.y = 18.f - sphere->position.y;
+		sphere_speed.y *= -1.0f;
+	}
+
+	sphere1->position += sphere1_speed * elapsed;
+	if (sphere1->position.z < 1.0f) {//hit ground
+		sphere1->position.z = 2.f - sphere1->position.z;
+		sphere1_speed.z *= -1.0f;
+	}
+	if (sphere1->position.z > 19.f) {//hit ceiling
+		sphere1->position.z = 38.f - sphere1->position.z;
+		sphere1_speed.z *= -1.0f;
+	}
+	if (sphere1->position.x < -9.f) {//hit left wall
+		sphere1->position.x = -18.f - sphere1->position.x;
+		sphere1_speed.x *= -1.0f;
+	}
+	if (sphere1->position.x > 9.f) {//hit right wall
+		sphere1->position.x = 18.f - sphere1->position.x;
+		sphere1_speed.x *= -1.0f;
+	}
+	if (sphere1->position.y < -9.f) {//hit back wall
+		sphere1->position.y = -18.f - sphere1->position.y;
+		sphere1_speed.y *= -1.0f;
+	}
+	if (sphere1->position.y > 9.f) {//hit front wall
+		sphere1->position.y = 18.f - sphere1->position.y;
+		sphere1_speed.y *= -1.0f;
+	}
+
+	target->position += target_speed * elapsed;
+	if (target->position.x < -9.f) {//hit left wall
+		target->position.x = -18.f - target->position.x;
+		target_speed.x *= -1.0f;
+	}
+	if (target->position.x > 9.f) {//hit right wall
+		target->position.x = 18.f - target->position.x;
+		target_speed.x *= -1.0f;
+	}
+	if (target->position.y < -9.f) {//hit back wall
+		target->position.y = -18.f - target->position.y;
+		target_speed.y *= -1.0f;
+	}
+	if (target->position.y > 9.f) {//hit front wall
+		target->position.y = 18.f - target->position.y;
+		target_speed.y *= -1.0f;
+	}
+	if (target->position.z < 1.f) {//hit ground
+		target->position.z = 2.f - target->position.z;
+		target_speed.z *= -1.0f;
+	}
+	if (target->position.z > 19.f) {//hit ceiling
+		target->position.z = 38.f - target->position.z;
+		target_speed.z *= -1.0f;
+	}
 
 	//move camera:
 	{
 
 		//combine inputs into a move:
-		constexpr float PlayerSpeed = 30.0f;
+		constexpr float PlayerSpeed = 12.0f;
 		glm::vec2 move = glm::vec2(0.0f);
 		if (left.pressed && !right.pressed) move.x =-1.0f;
 		if (!left.pressed && right.pressed) move.x = 1.0f;
@@ -158,6 +289,35 @@ void PlayMode::update(float elapsed) {
 		glm::vec3 frame_forward = -frame[2];
 
 		camera->transform->position += move.x * frame_right + move.y * frame_forward;
+		if(camera->transform->position.x < -9.f){
+			camera->transform->position.x = -9.f;
+		}
+		if(camera->transform->position.x > 9.f){
+			camera->transform->position.x = 9.f;
+		}
+		if(camera->transform->position.y < -9.f){
+			camera->transform->position.y = -9.f;
+		}
+		if(camera->transform->position.y > 9.f){
+			camera->transform->position.y = 9.f;
+		}
+		if(camera->transform->position.z < 1.f){
+			camera->transform->position.z = 1.f;
+		}
+		if(camera->transform->position.z > 19.f){
+			camera->transform->position.z = 19.f;
+		}
+
+		if(glm::length(target->position - camera->transform->position) < 1.f){
+			win = true;
+			std::cout << "You win!" << std::endl;
+		}
+		if(glm::length(sphere->position - camera->transform->position) < 1.5f || glm::length(sphere1->position - camera->transform->position) < 1.5f){
+			lose = true;
+			std::cout << "You lose!" << std::endl;
+		}
+
+
 	}
 
 	//reset button press counters:
@@ -174,9 +334,12 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 	//set up light type and position for lit_color_texture_program:
 	// TODO: consider using the Light(s) in the scene to do this
 	glUseProgram(lit_color_texture_program->program);
-	glUniform1i(lit_color_texture_program->LIGHT_TYPE_int, 1);
-	glUniform3fv(lit_color_texture_program->LIGHT_DIRECTION_vec3, 1, glm::value_ptr(glm::vec3(0.0f, 0.0f,-1.0f)));
-	glUniform3fv(lit_color_texture_program->LIGHT_ENERGY_vec3, 1, glm::value_ptr(glm::vec3(1.0f, 1.0f, 0.95f)));
+	glUniform1i(lit_color_texture_program->LIGHT_TYPE_int, 0);
+	glUniform3fv(lit_color_texture_program->LIGHT_DIRECTION_vec3, 1, glm::value_ptr(glm::vec3(0.2f, 0.2f,-1.0f)));
+	glUniform3fv(lit_color_texture_program->LIGHT_ENERGY_vec3, 1, glm::value_ptr(80.f * glm::vec3(1.0f, 1.0f, 0.95f)));
+	glUniform3fv(lit_color_texture_program->LIGHT_LOCATION_vec3, 1, glm::value_ptr(glm::vec3(0.0f, 0.0f, 10.f)));
+	glUniform3fv(lit_color_texture_program->CAMERA_POSITION_vec3, 1, glm::value_ptr(camera->transform->position));
+	//std::cout<< "camera position: " << camera->transform->position.x << ", " << camera->transform->position.y << ", " << camera->transform->position.z << std::endl;
 	glUseProgram(0);
 
 	glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
@@ -201,12 +364,19 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 		));
 
 		constexpr float H = 0.09f;
-		lines.draw_text("Mouse motion rotates camera; WASD moves; escape ungrabs mouse",
+		std::string message = "Balls = Death, Wings = Success!";
+		if(win){
+			message = "You win!";
+		}
+		if(lose){
+			message = "You lose!";
+		}
+		lines.draw_text(message,
 			glm::vec3(-aspect + 0.1f * H, -1.0 + 0.1f * H, 0.0),
 			glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
 			glm::u8vec4(0x00, 0x00, 0x00, 0x00));
 		float ofs = 2.0f / drawable_size.y;
-		lines.draw_text("Mouse motion rotates camera; WASD moves; escape ungrabs mouse",
+		lines.draw_text(message,
 			glm::vec3(-aspect + 0.1f * H + ofs, -1.0 + + 0.1f * H + ofs, 0.0),
 			glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
 			glm::u8vec4(0xff, 0xff, 0xff, 0x00));
